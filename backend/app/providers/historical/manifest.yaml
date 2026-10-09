@@ -1,0 +1,48 @@
+provider_key: football_data_uk
+description: "MVP-A Required Historical Data Sources (4 Competitions x 3 Completed Seasons = 12 Datasets)"
+version: "1.0.0"
+
+sources:
+  # English Premier League (E0)
+  - competition_code: EPL
+    season_year: 2021-22
+    is_required: true
+  - competition_code: EPL
+    season_year: 2022-23
+    is_required: true
+  - competition_code: EPL
+    season_year: 2023-24
+    is_required: true
+
+  # La Liga (SP1)
+  - competition_code: LA_LIGA
+    season_year: 2021-22
+    is_required: true
+  - competition_code: LA_LIGA
+    season_year: 2022-23
+    is_required: true
+  - competition_code: LA_LIGA
+    season_year: 2023-24
+    is_required: true
+
+  # Serie A (I1)
+  - competition_code: SERIE_A
+    season_year: 2021-22
+    is_required: true
+  - competition_code: SERIE_A
+    season_year: 2022-23
+    is_required: true
+  - competition_code: SERIE_A
+    season_year: 2023-24
+    is_required: true
+
+  # Bundesliga (D1)
+  - competition_code: BUNDESLIGA
+    season_year: 2021-22
+    is_required: true
+  - competition_code: BUNDESLIGA
+    season_year: 2022-23
+    is_required: true
+  - competition_code: BUNDESLIGA
+    season_year: 2023-24
+    is_required: true

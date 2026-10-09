@@ -1,0 +1,1255 @@
+<USER_REQUEST>
+# Sprint 4.3 — Team-Specific Attack–Defence Poisson Model
+
+You are working inside the existing repository for the **Football Intelligence & Probability Analysis System**.
+
+Execute **Phase 4, Sprint 4.3: Team-Specific Attack–Defence Poisson Model**.
+
+This is a complete implementation, integration, verification and certification sprint—not a planning exercise.
+
+Begin by auditing the repository and the certified Sprint 4.2 implementation. Reuse the existing probability engine, score-matrix calculations, DTOs, provenance infrastructure and mathematical validation wherever they are correct.
+
+Do not destructively rewrite or duplicate working Sprint 4.2 functionality.
+
+---
+
+# 1. Product Goal
+
+The system’s primary purpose is:
+
+> Given an upcoming football match between Team A and Team B, calculate the probability of a home win, draw and away win, determine which outcome has the highest probability, and preserve the statistical evidence required to explain why.
+
+The primary outputs are:
+
+```text
+P(Home Win)
+P(Draw)
+P(Away Win)
+```
+
+Supporting outputs include:
+
+```text
+Expected home goals
+Expected away goals
+Exact-score probability matrix
+Over/Under probabilities
+Both Teams to Score probabilities
+Most likely scorelines
+Team attack and defence strength evidence
+```
+
+The system estimates probabilities. It does not guarantee results or provide “sure bets.”
+
+---
+
+# 2. Confirmed Starting State
+
+Sprint 4.2 established and certified:
+
+* Independent Poisson goal probability calculations
+* Exact-score probability matrices
+* 1X2 probability derivation
+* Over/Under 2.5 calculations
+* BTTS calculations
+* Mathematical invariants
+* SciPy golden-reference verification
+* Prediction provenance
+* Dataset and feature fingerprints
+* Point-in-time feature isolation
+* Anti-leakage tests
+* 244/244 repository tests passing
+
+Approved historical dataset:
+
+```text
+Release key:       mvp_a_historical_v1
+Version:           v1
+Status:            APPROVED
+Total matches:     4,338
+Dataset SHA-256:   9b9ceb90da803eaa498c26a070d4ac69483fa4d06c391444b2c326f3fa03021c
+Seasons:           2021/2022, 2022/2023, 2023/2024
+```
+
+Competitions:
+
+```text
+E0   English Premier League    1,140 matches
+SP1  Spanish La Liga           1,140 matches
+I1   Italian Serie A           1,140 matches
+D1   German Bundesliga           918 matches
+```
+
+Sprint 4.2’s genuine historical demonstrations produced identical predictions for all four example fixtures:
+
+```text
+Home lambda:     1.1500
+Away lambda:     1.8500
+P(Home):         0.23532
+P(Draw):         0.22729
+P(Away):         0.53739
+```
+
+This behavior was acceptable only as a mathematical baseline using manually supplied constant lambdas.
+
+It is not an acceptable real match prediction model because it does not learn or compare the strengths of the actual teams.
+
+Sprint 4.3 must eliminate that limitation.
+
+---
+
+# 3. Sprint Objective
+
+Implement a production-quality, point-in-time, team-specific **Attack–Defence Poisson model** that learns:
+
+* Each team’s attacking strength
+* Each team’s defensive strength
+* Competition scoring baseline
+* Competition home advantage
+* Appropriate regularization
+* Safe fallback behavior for teams with limited or no history
+
+For each fixture, the trained model must generate fixture-specific:
+
+```text
+lambda_home
+lambda_away
+```
+
+Those values must then pass through the certified Sprint 4.2 probability engine to generate:
+
+* Home-win probability
+* Draw probability
+* Away-win probability
+* Exact-score matrix
+* Over/Under probabilities
+* BTTS probabilities
+* Most likely scorelines
+
+The implementation must prove that predictions are derived from team identities and historical performance—not from fixed constants, target results or manually assigned example lambdas.
+
+---
+
+# 4. Mathematical Model
+
+Implement a regularized log-linear Attack–Defence Poisson model.
+
+For a fixture where home team \(i\) plays away team \(j\):
+
+$$
+G_H \sim \text{Poisson}(\lambda_H)
+$$
+
+$$
+G_A \sim \text{Poisson}(\lambda_A)
+$$
+
+Use a formulation equivalent to:
+
+$$
+\log(\lambda_H)
+=
+\mu_c + h_c + \alpha_{i,c} - \delta_{j,c}
+$$
+
+$$
+\log(\lambda_A)
+=
+\mu_c + \alpha_{j,c} - \delta_{i,c}
+$$
+
+Where:
+
+* \(c\) is the competition
+* \(\mu_c\) is the competition scoring baseline
+* \(h_c\) is home advantage
+* \(\alpha_{team,c}\) is attacking strength
+* \(\delta_{team,c}\) is defensive resistance or defensive strength
+
+If the repository uses a convention where larger defence parameters mean weaker defence, adjust the signs accordingly. Use one documented convention consistently throughout training, prediction, artifacts and explanations.
+
+The model must make the interpretation unambiguous.
+
+For example:
+
+```text
+attack_strength > 0     => stronger-than-average attack
+defence_strength > 0    => stronger-than-average defence
+```
+
+or:
+
+```text
+defence_weakness > 0    => weaker-than-average defence
+```
+
+Do not mix these conventions.
+
+---
+
+# 5. Identifiability Requirements
+
+Attack and defence parameters are not naturally identifiable without constraints.
+
+Implement and document a valid identifiability strategy, such as:
+
+$$
+\sum_t \alpha_{t,c}=0
+$$
+
+$$
+\sum_t \delta_{t,c}=0
+$$
+
+for teams within each competition, or an equivalent reference-team/reparameterization strategy.
+
+Requirements:
+
+* The optimization must not rely on an unconstrained redundant parameterization.
+* Parameter estimates must be deterministic for identical data and configuration.
+* Artifact loading must preserve identical parameter interpretation.
+* Unit tests must verify the constraints within a documented tolerance.
+* Competition baselines must not be accidentally duplicated inside team parameters.
+
+Do not solve identifiability by arbitrarily dropping undocumented parameters.
+
+---
+
+# 6. Competition Modeling Strategy
+
+The four competitions have different scoring environments and team populations.
+
+Implement an explicit, configurable strategy.
+
+The canonical Sprint 4.3 strategy should preferably be:
+
+```text
+One independently fitted Attack–Defence model per competition
+```
+
+This avoids assuming that attack and defence parameters have identical meaning across leagues.
+
+Each competition model should learn:
+
+* Competition goal baseline
+* Competition home advantage
+* Team attack parameters
+* Team defence parameters
+* Training window
+* Regularization configuration
+* Convergence information
+
+If a combined multi-competition model already exists and is scientifically justified, retain it only if competition-specific intercepts and home-advantage parameters are correctly represented.
+
+Do not pool all competitions under one global scoring baseline without measuring and documenting the consequences.
+
+---
+
+# 7. Training Data Construction
+
+Construct training observations only from legitimate completed historical fixtures available before the relevant evaluation or prediction cutoff.
+
+Each training observation requires:
+
+* Match ID
+* Competition
+* Season
+* Kickoff timestamp
+* Home-team ID
+* Away-team ID
+* Final home goals
+* Final away goals
+* Dataset release identity
+* Data-quality status
+
+Final scores are valid labels for past training matches.
+
+They must never be exposed as inputs for the target fixture being predicted.
+
+Requirements:
+
+* Only approved and eligible completed matches may train the model.
+* Exclude cancelled, abandoned or unresolved fixtures.
+* Reject duplicate fixture IDs.
+* Reject invalid or negative scores.
+* Reject fixtures lacking canonical team identities.
+* Apply deterministic ordering.
+* Record exact training match IDs or a deterministic training-partition fingerprint.
+* Validate that every training kickoff is strictly earlier than the prediction/evaluation cutoff.
+* Do not use the target fixture’s score during training or inference.
+* Do not fit a model on all three seasons and then claim predictions for earlier fixtures are point-in-time.
+
+---
+
+# 8. Point-in-Time Evaluation
+
+The canonical evaluation must be temporally honest.
+
+Use the temporal split framework established in Sprint 4.1.
+
+Support at least:
+
+## 8.1 Season holdout evaluation
+
+Recommended initial evaluation:
+
+```text
+Training:    2021/2022 and 2022/2023
+Evaluation:  2023/2024
+```
+
+No 2023/2024 result may influence the initial model used to predict the beginning of the 2023/2024 evaluation period unless using an explicitly documented rolling refit.
+
+## 8.2 Expanding-window evaluation
+
+Support chronological refitting where:
+
+* Each prediction uses only earlier completed matches.
+* Training history expands through time.
+* Refit frequency is explicit.
+* Predictions are generated before adding the target result.
+* The target result is added only after its prediction is frozen.
+
+Possible configurable refit schedules:
+
+* Every matchday
+* Weekly
+* Every defined number of completed fixtures
+* Before every target fixture for reference verification
+
+Do not silently mix static season-holdout results with rolling-refit results.
+
+Report them separately.
+
+---
+
+# 9. Regularization
+
+Only approximately three seasons of data are available, so unregularized team parameters may overfit.
+
+Implement configurable L2 regularization or an equivalent statistically justified shrinkage method for:
+
+* Team attack parameters
+* Team defence parameters
+
+Requirements:
+
+* Regularization strength must be part of the training configuration.
+* The value must be selected without using the final test set.
+* Hyperparameter selection must occur using training/validation data or nested temporal evaluation.
+* Sparse-history teams must shrink toward competition-average strength.
+* Competition intercept and home advantage should not be regularized blindly in the same way as team effects unless justified.
+* Report the selected value and selection process.
+* Preserve it in the model artifact.
+
+Do not choose regularization based on the 2023/2024 test score and then report 2023/2024 as untouched evaluation.
+
+---
+
+# 10. Optimization
+
+Use an appropriate numerical optimizer for penalized Poisson likelihood.
+
+The implementation must expose:
+
+* Objective value
+* Optimizer status
+* Convergence flag
+* Iteration count
+* Gradient norm where supported
+* Selected tolerance
+* Maximum iterations
+* Failure reason
+* Parameter count
+
+Requirements:
+
+* Use numerically stable log-likelihood calculations.
+* Protect the exponential link from overflow and underflow.
+* Fail clearly when optimization does not converge.
+* Do not silently publish parameters from a failed optimizer.
+* Use deterministic initialization.
+* Test multiple safe initializations if necessary.
+* Verify the analytic gradient against finite differences if an analytic gradient is implemented.
+* Add a synthetic parameter-recovery test.
+* Do not fabricate convergence success.
+
+A failed competition fit must produce an explicit failure or approved fallback state, not silently revert to arbitrary lambdas.
+
+---
+
+# 11. Lambda Generation
+
+For each fixture, generate:
+
+```text
+lambda_home
+lambda_away
+```
+
+using:
+
+* The correct competition model
+* Home-team attack strength
+* Away-team defence strength
+* Away-team attack strength
+* Home-team defence strength
+* Competition goal baseline
+* Competition home advantage
+
+Validation rules:
+
+* Both lambdas must be finite.
+* Both lambdas must be strictly positive.
+* Both lambdas must remain inside a documented operational safety range.
+* Extreme values must be flagged.
+* Severe invalid values must fail rather than being silently clipped.
+* Any permitted stabilization must be documented and tested.
+
+The prediction must record the components contributing to each lambda.
+
+Example internal evidence:
+
+```json
+{
+  "home_lambda_components": {
+    "competition_baseline": 0.0,
+    "home_advantage": 0.0,
+    "home_attack": 0.0,
+    "away_defence": 0.0,
+    "log_lambda": 0.0,
+    "lambda": 0.0
+  },
+  "away_lambda_components": {
+    "competition_baseline": 0.0,
+    "away_attack": 0.0,
+    "home_defence": 0.0,
+    "log_lambda": 0.0,
+    "lambda": 0.0
+  }
+}
+```
+
+These components will later support the Phase 5 explanation engine.
+
+---
+
+# 12. Cold-Start and Sparse-History Handling
+
+The model must handle:
+
+* Newly promoted teams
+* Teams appearing for the first time
+* Renamed teams with canonical identity continuity
+* Teams with very few observed matches
+* Competition transfers where applicable
+* Unknown teams presented accidentally
+
+Define deterministic policies.
+
+Preferred behavior:
+
+## Known team with sufficient history
+
+Use learned team parameters.
+
+## Known team with limited history
+
+Use regularized parameters heavily shrunk toward competition average and expose a limited-history warning.
+
+## Legitimately unseen team
+
+Use competition-average attack and defence priors, set a cold-start flag and lower evidence quality.
+
+## Invalid unknown identity
+
+Reject the prediction request unless an explicit cold-start identity policy applies.
+
+The model must never create arbitrary strength values based on the team’s name, identifier ordering or current fixture opponent.
+
+Record:
+
+```text
+team_history_count
+cold_start_status
+fallback_strategy
+evidence_quality
+```
+
+Do not claim normal confidence for cold-start predictions.
+
+---
+
+# 13. Season Transition Handling
+
+Teams may be promoted, relegated or absent between seasons.
+
+Implement and document:
+
+* How team parameters carry across seasons
+* Whether older seasons receive the same weight in Sprint 4.3
+* How teams returning after absence are handled
+* How promoted teams are initialized
+* How competition membership is validated at prediction time
+
+Time-decay weighting and Dixon–Coles low-score correction belong primarily to Sprint 4.4.
+
+Sprint 4.3 may provide configuration hooks for time weighting, but the canonical Sprint 4.3 comparison must clearly identify whether uniform historical weighting is used.
+
+Do not quietly introduce Dixon–Coles corrections in this sprint.
+
+---
+
+# 14. Integration With Sprint 4.2
+
+Reuse the certified Sprint 4.2 components for:
+
+* Poisson probability mass functions
+* Score-grid construction
+* Residual-tail handling
+* Exact-score normalization
+* 1X2 aggregation
+* BTTS calculation
+* Over/Under calculation
+* Top-score extraction
+* Mathematical invariant validation
+
+Replace only the source of the lambdas.
+
+Expected flow:
+
+```text
+Historical completed fixtures
+        ↓
+Attack–Defence model fitting
+        ↓
+Team and competition parameters
+        ↓
+Fixture-specific lambda_home and lambda_away
+        ↓
+Certified Sprint 4.2 score matrix
+        ↓
+1X2, scorelines, BTTS and totals
+        ↓
+Prediction DTO with provenance and evidence
+```
+
+Do not duplicate the score-matrix engine inside the new model.
+
+---
+
+# 15. Prediction Contract
+
+Extend the existing prediction DTO without breaking compatible Sprint 4.2 consumers.
+
+Include or associate:
+
+```json
+{
+  "fixture_id": "string",
+  "competition": "string",
+  "kickoff": "UTC timestamp",
+  "prediction_cutoff": "UTC timestamp",
+  "model_family": "attack_defence_poisson",
+  "model_version": "string",
+  "probabilities": {
+    "home_win": 0.0,
+    "draw": 0.0,
+    "away_win": 0.0
+  },
+  "most_likely_outcome": "HOME_WIN | DRAW | AWAY_WIN",
+  "expected_goals": {
+    "home": 0.0,
+    "away": 0.0
+  },
+  "score_matrix": {},
+  "btts": {},
+  "totals": {},
+  "top_scorelines": [],
+  "team_strengths": {
+    "home_attack": 0.0,
+    "home_defence": 0.0,
+    "away_attack": 0.0,
+    "away_defence": 0.0
+  },
+  "competition_parameters": {
+    "goal_baseline": 0.0,
+    "home_advantage": 0.0
+  },
+  "evidence_quality": {
+    "home_history_count": 0,
+    "away_history_count": 0,
+    "home_cold_start": false,
+    "away_cold_start": false
+  },
+  "provenance": {}
+}
+```
+
+Do not label probabilities as calibrated.
+
+Use a status such as:
+
+```text
+RAW_UNCALIBRATED
+```
+
+until the later calibration sprint is complete.
+
+Keep lifecycle status experimental until backtesting, calibration and champion selection are complete.
+
+---
+
+# 16. Artifact Requirements
+
+Create a versioned model artifact for each trained competition model or an equivalent validated aggregate artifact.
+
+Store:
+
+* Model family
+* Model version
+* Artifact schema version
+* Competition
+* Dataset release
+* Dataset fingerprint
+* Training partition fingerprint
+* Training start and end
+* Training match count
+* Teams included
+* Team match counts
+* Attack parameters
+* Defence parameters
+* Competition baseline
+* Home advantage
+* Identifiability strategy
+* Regularization type and strength
+* Optimizer configuration
+* Convergence diagnostics
+* Feature or label schema
+* Random seed
+* Dependency versions
+* Evaluation summary
+* Created timestamp
+* Deterministic artifact fingerprint
+
+Requirements:
+
+* Save/load round-trip must preserve predictions.
+* Corrupted artifacts must be rejected.
+* Unknown artifact versions must fail clearly.
+* Wrong-competition usage must be rejected.
+* Team parameter ordering must be deterministic.
+* Volatile timestamps must not make the canonical model fingerprint irreproducible.
+* Fingerprint generation must be tested.
+
+---
+
+# 17. Genuine Historical Demonstration
+
+Generate a verified historical demonstration using real fixtures from the approved dataset.
+
+Use at least:
+
+* One EPL fixture
+* One La Liga fixture
+* One Serie A fixture
+* One Bundesliga fixture
+
+Each target must:
+
+* Exist in `mvp_a_historical_v1`
+* Have a real canonical match ID
+* Have a real kickoff timestamp
+* Use a model trained only on matches available before the prediction cutoff
+* Be generated through the actual production code path
+* Include its training-partition fingerprint
+* Include its model artifact fingerprint
+* Include fixture-specific lambdas
+* Include 1X2 probabilities
+* Include actual result only after the prediction output has been frozen
+
+Do not use manually constructed fake fixtures, random UUIDs or invented 2025 dates.
+
+Do not describe synthetic tests as real historical predictions.
+
+---
+
+# 18. Required Proof of Team Sensitivity
+
+The previous baseline produced identical predictions across all four fixtures. Sprint 4.3 must prove that the new model is team-sensitive.
+
+Provide all of the following evidence:
+
+## 18.1 Genuine fixture variance
+
+For genuine historical targets, report:
+
+* Variance of `lambda_home`
+* Variance of `lambda_away`
+* Number of unique lambda pairs
+* Number of unique 1X2 probability triples
+
+Do not force uniqueness artificially. If two fixtures legitimately produce similar predictions, report that honestly.
+
+## 18.2 Identity perturbation test
+
+Using a fixed competition, venue role and cutoff:
+
+* Generate a prediction for Team A vs Team B.
+* Replace Team A with a materially different learned team while preserving other valid inputs.
+* Confirm that the appropriate lambda or probabilities change.
+* Swap home and away teams and confirm home advantage and team parameters are applied correctly.
+
+## 18.3 Parameter dependency test
+
+Verify that altering a copied model artifact’s specific attack or defence parameter in a controlled unit test changes the expected lambda in the mathematically correct direction.
+
+## 18.4 No fixed-lambda path
+
+Add a regression test proving that production Attack–Defence predictions do not use Sprint 4.2 demonstration constants such as `1.15` and `1.85` unless the fitted parameters genuinely produce them.
+
+Do not simply assert that four predictions are unequal. Prove the dependency chain.
+
+---
+
+# 19. Backtesting and Baseline Comparison
+
+Evaluate the model using genuine time-ordered out-of-sample predictions.
+
+Compare against:
+
+1. Global outcome-frequency baseline
+2. Competition-specific outcome-frequency baseline
+3. Sprint 4.2 constant-lambda Poisson baseline
+4. Attack–Defence Poisson model
+
+Report at minimum:
+
+* Multiclass log loss
+* Multiclass Brier score
+* Ranked probability score, if already implemented correctly
+* Accuracy as a secondary metric
+* Mean prediction entropy
+* Actual outcome distribution
+* Predicted outcome distribution
+* Average home/draw/away probabilities
+* Calibration-bin summaries, clearly marked preliminary
+* Metrics by competition
+* Metrics by season or evaluation period
+* Evaluation sample size
+
+Also report goal-model diagnostics:
+
+* Mean predicted home goals
+* Mean actual home goals
+* Mean predicted away goals
+* Mean actual away goals
+* Poisson deviance or negative log-likelihood
+* Lambda distribution
+* Extreme-lambda count
+
+Do not claim superiority unless metric differences support it.
+
+If the Attack–Defence model fails to improve over simple baselines, report that honestly and investigate:
+
+* Regularization
+* Optimization
+* Parameter sign convention
+* Temporal construction
+* Competition pooling
+* Cold-start behavior
+* Home-advantage estimation
+* Overfitting
+
+A failure to outperform a baseline does not permit test-set tuning.
+
+---
+
+# 20. Testing Requirements
+
+Add thorough unit, integration and end-to-end tests.
+
+## 20.1 Mathematical tests
+
+Test:
+
+* Correct home lambda formula
+* Correct away lambda formula
+* Correct sign direction
+* Positive lambdas
+* Finite lambdas
+* Identifiability constraints
+* Home-advantage application
+* Competition baseline application
+* Attack-strength direction
+* Defence-strength direction
+
+## 20.2 Synthetic recovery tests
+
+Generate a deterministic synthetic league with known:
+
+* Competition baseline
+* Home advantage
+* Team attack strengths
+* Team defence strengths
+
+Fit the model and verify that:
+
+* Optimization converges
+* Recovered parameters have the expected ordering
+* Strong attacks receive stronger estimated attack parameters
+* Strong defences receive stronger estimated defensive parameters
+* Predictions respond correctly to team quality
+* Estimated values are within reasonable documented tolerance
+
+Do not require unrealistically exact recovery from small random samples.
+
+## 20.3 Leakage tests
+
+Prove:
+
+* Target scores are absent from prediction inputs
+* Target fixture is excluded from its training partition
+* Future fixtures do not enter training
+* Evaluation results are added only after predictions are frozen
+* Hyperparameter selection does not inspect the final test set
+* Bookmaker odds are not used
+
+## 20.4 Temporal tests
+
+Test:
+
+* Training fixtures precede target cutoff
+* Static season holdout boundaries
+* Expanding-window ordering
+* No fixture overlap
+* Deterministic refit schedule
+* Same-time kickoff handling
+* Postponed fixture timestamp handling where relevant
+
+For fixtures sharing the same kickoff timestamp, ensure one match’s result cannot be used to predict another match starting at the same time.
+
+## 20.5 Optimization tests
+
+Test:
+
+* Normal convergence
+* Failed convergence
+* Invalid starting parameters
+* Maximum-iteration exhaustion
+* Gradient verification if applicable
+* Overflow protection
+* Deterministic repeated fitting
+
+## 20.6 Cold-start tests
+
+Test:
+
+* Known team
+* Sparse-history team
+* Unseen legitimate team
+* Invalid team identity
+* Promoted-team fallback
+* Fallback warning propagation
+
+## 20.7 Artifact tests
+
+Test:
+
+* Save/load equivalence
+* Deterministic fingerprint
+* Corruption detection
+* Competition mismatch
+* Unsupported schema version
+* Missing parameter
+* Stable team ordering
+
+## 20.8 Integration tests
+
+Verify the complete path:
+
+```text
+approved historical data
+→ temporal training partition
+→ fitted team parameters
+→ fixture-specific lambdas
+→ Sprint 4.2 probability engine
+→ valid prediction DTO
+→ serialized artifact
+→ reloaded artifact
+→ identical prediction
+```
+
+Run:
+
+* Sprint 4.3 tests
+* Full repository test suite
+* Linter
+* Formatter verification
+* Type checker
+* Migration checks where relevant
+* Real historical demonstration
+* Backtest command
+
+Do not weaken or remove existing Sprint 4.2 tests.
+
+---
+
+# 21. CLI and Operational Commands
+
+Provide repository-appropriate commands for:
+
+* Training one competition model
+* Training all supported competition models
+* Inspecting learned parameters
+* Evaluating a saved artifact
+* Running temporal backtests
+* Predicting a historical target
+* Verifying an artifact
+* Generating the Sprint 4.3 certification report
+
+Use configuration files or explicit arguments.
+
+Do not hardcode Dustan’s local Windows path.
+
+Commands must:
+
+* Support `--help`
+* Validate arguments
+* Produce meaningful exit codes
+* Report output artifact locations
+* Fail clearly on invalid data or non-convergence
+
+---
+
+# 22. Parameter Inspection
+
+Create a safe inspection output showing, per competition:
+
+* Strongest estimated attacks
+* Weakest estimated attacks
+* Strongest estimated defences
+* Weakest estimated defences
+* Competition baseline
+* Home advantage
+* Team match counts
+* Sparse-history flags
+
+This is for scientific inspection, not a claim that parameter rankings are absolute truth.
+
+Check the rankings for obvious implementation errors, such as:
+
+* Every team receiving identical parameters
+* Attack and defence signs being reversed
+* Team IDs mapped to the wrong clubs
+* Home advantage being applied to both teams
+* Parameters exploding for low-sample teams
+
+Include these sanity checks in the certification report.
+
+---
+
+# 23. Documentation
+
+Create or update documentation explaining:
+
+* Attack–Defence Poisson assumptions
+* Lambda equations
+* Parameter sign conventions
+* Identifiability constraints
+* Regularization
+* Competition strategy
+* Training data eligibility
+* Temporal evaluation
+* Cold-start handling
+* Season transitions
+* Artifact structure
+* CLI usage
+* Known limitations
+* Difference between raw and calibrated probabilities
+* Difference between mathematical validity and predictive usefulness
+
+Document clearly:
+
+> Sprint 4.2 proved that the probability calculations were mathematically correct. Sprint 4.3 makes the lambdas team- and fixture-specific. It does not yet make the probabilities calibrated or production-approved.
+
+---
+
+# 24. Scope Boundaries
+
+Do not implement the following as part of Sprint 4.3:
+
+* Dixon–Coles low-score correction
+* Bivariate Poisson
+* Final time-decay optimization
+* Final 251-feature multinomial model
+* Final ensemble
+* Final probability calibration
+* Final confidence classification
+* Natural-language explanations
+* Live fixture API integration
+* Dashboard
+* Betting recommendations
+* Bookmaker odds ingestion
+
+Provide clean extension points where appropriate, but do not mix later sprint responsibilities into this implementation.
+
+---
+
+# 25. Required Deliverables
+
+Sprint 4.3 is complete only when the repository contains:
+
+1. Attack–Defence Poisson model implementation
+2. Competition-specific training strategy
+3. Identifiability enforcement
+4. Regularized parameter estimation
+5. Optimizer diagnostics
+6. Fixture-specific lambda generator
+7. Cold-start and sparse-history policies
+8. Sprint 4.2 probability-engine integration
+9. Extended prediction provenance
+10. Versioned model artifacts
+11. Save/load and fingerprint verification
+12. Temporal backtesting integration
+13. Baseline comparison
+14. Team-sensitivity proof
+15. Real historical demonstrations
+16. Comprehensive automated tests
+17. CLI or execution commands
+18. Updated documentation
+19. Sprint 4.3 scientific certification report
+
+---
+
+# 26. Definition of Done
+
+Mark Sprint 4.3 complete only if:
+
+* Team attack and defence parameters are learned from approved historical results.
+* Parameterization is identifiable.
+* Regularization is active and documented.
+* Optimization converges for every certified competition model.
+* Non-converged models cannot publish normal predictions.
+* Predictions use only matches available before the target cutoff.
+* Target results are not exposed during training or inference.
+* Fixture-specific lambdas are generated through the real model.
+* Production Attack–Defence predictions do not use manually supplied constants.
+* Different team-strength inputs demonstrably affect lambdas.
+* Home advantage is applied correctly.
+* Cold-start behavior is deterministic and visible.
+* Exact-score and 1X2 outputs satisfy all Sprint 4.2 invariants.
+* Artifacts can be saved, verified and reloaded.
+* Reloaded artifacts reproduce the same predictions.
+* Genuine historical demonstrations use real dataset match IDs.
+* Backtesting is chronological.
+* Metrics are compared honestly against baselines.
+* All Sprint 4.3 tests pass.
+* All existing repository tests still pass.
+* Documentation and reproducible commands are complete.
+* No synthetic fixture is represented as genuine historical evidence.
+* No uncalibrated probability is labeled calibrated.
+* No experimental model is labeled production-ready.
+
+If any mandatory requirement fails, do not report the sprint as fully ready.
+
+---
+
+# 27. Required Final Report
+
+Produce a detailed final report with these sections:
+
+## A. Executive Summary
+
+Report:
+
+* What was implemented
+* Whether team-specific predictions now work
+* Whether fixed-lambda production behavior was eliminated
+* Sprint status
+* Sprint 4.4 readiness
+
+## B. Repository Audit
+
+Report:
+
+* Existing Sprint 4.2 components found
+* Components reused
+* Components modified
+* Duplicate or obsolete paths found
+* Risks discovered
+
+## C. Mathematical Specification
+
+Document:
+
+* Exact lambda equations
+* Parameter convention
+* Identifiability method
+* Regularization
+* Optimization method
+* Competition strategy
+
+## D. Training Evidence
+
+For each competition, report:
+
+* Training period
+* Training match count
+* Team count
+* Parameter count
+* Regularization strength
+* Optimization status
+* Iterations
+* Final objective
+* Convergence diagnostics
+* Training partition fingerprint
+* Artifact fingerprint
+
+## E. Learned Parameter Sanity Check
+
+For each competition, show:
+
+* Top attacks
+* Weakest attacks
+* Strongest defences
+* Weakest defences
+* Home advantage
+* Goal baseline
+* Sparse-history warnings
+
+Do not overinterpret these rankings.
+
+## F. Genuine Historical Predictions
+
+For at least four real targets, show:
+
+* Match ID
+* Competition
+* Fixture
+* Kickoff
+* Prediction cutoff
+* Training end
+* Home and away match-history counts
+* Home and away team parameters
+* Competition parameters
+* Home lambda
+* Away lambda
+* Home/draw/away probabilities
+* Most likely outcome
+* Most likely score
+* Top scorelines
+* BTTS
+* Over/Under 2.5
+* Prediction status
+* Model artifact fingerprint
+* Training partition fingerprint
+* Actual result, revealed only after prediction generation
+
+## G. Team-Sensitivity Proof
+
+Show:
+
+* Lambda variance
+* Unique probability outputs
+* Team substitution test
+* Home/away swap test
+* Parameter dependency test
+* Evidence that fixed demonstration constants are not used
+
+## H. Backtest Results
+
+Compare:
+
+* Global frequency baseline
+* Competition frequency baseline
+* Constant-lambda Poisson baseline
+* Attack–Defence Poisson
+
+Report:
+
+* Sample size
+* Log loss
+* Brier score
+* Ranked probability score if supported
+* Accuracy as secondary
+* Goal likelihood or deviance
+* Results by competition
+* Warnings and statistical limitations
+
+## I. Leakage and Reproducibility Evidence
+
+Prove:
+
+* Training precedes targets
+* Target fixture exclusion
+* Same-kickoff isolation
+* No bookmaker inputs
+* Deterministic artifacts
+* Save/load prediction equivalence
+* Dataset provenance
+
+## J. Files Changed
+
+For every created or modified file, report:
+
+* File path
+* Purpose
+* Important implementation details
+
+## K. Verification
+
+List exact commands and actual outcomes for:
+
+* Sprint tests
+* Full repository tests
+* Linting
+* Formatting
+* Type checking
+* Model training
+* Artifact verification
+* Historical prediction demonstration
+* Temporal backtest
+
+Do not claim a command passed unless it was actually executed successfully.
+
+## L. Remaining Risks
+
+Include:
+
+* Limited number of seasons
+* Promoted-team cold start
+* Independence assumption
+* Low-score correlation limitation
+* Raw probability calibration
+* Parameter uncertainty
+* Competition-specific sample size
+* Any incomplete verification
+
+## M. Certification
+
+End using exactly one:
+
+```text
+SPRINT 4.3 STATUS: READY
+SPRINT 4.3 STATUS: CONDITIONALLY READY
+SPRINT 4.3 STATUS: NOT READY
+```
+
+Then exactly one:
+
+```text
+SPRINT 4.4 READINESS: READY
+SPRINT 4.4 READINESS: BLOCKED
+```
+
+Support both decisions with evidence.
+
+---
+
+Begin by auditing the repository and tracing exactly where Sprint 4.2 receives its fixed lambdas. Then implement the team-specific Attack–Defence model, connect it to the certified probability engine, run genuine temporal backtests, verify everything and produce the complete certification report.
+
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-09-20T07:14:26+03:00.
+</ADDITIONAL_METADATA>

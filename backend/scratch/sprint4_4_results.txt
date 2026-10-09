@@ -1,0 +1,25 @@
+M0 Results:
+Log Loss: 1.0744
+Brier Score: 0.6500
+ECE: 0.0105
+
+M1 Results:
+Log Loss: 0.9929
+Brier Score: 0.5928
+ECE: 0.0124
+
+M2 Results:
+Log Loss: 0.9945
+Brier Score: 0.5939
+ECE: 0.0287
+
+M3 Results:
+Log Loss: 1.0914
+Brier Score: 0.6619
+ECE: 0.1002
+
+M4 Results:
+Log Loss: 1.0017
+Brier Score: 0.5986
+ECE: 0.0356
+
