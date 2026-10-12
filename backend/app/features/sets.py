@@ -50,7 +50,7 @@ class FeatureSetManager:
             fset = FeatureSet(
                 name=name,
                 version=version,
-                description=description,
+                description=description[:255] if description else None,
                 is_active=True,
             )
             db.add(fset)
