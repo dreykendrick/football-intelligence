@@ -30,6 +30,7 @@ def upgrade() -> None:
         sa.Column('code', sa.String(length=20), nullable=False),
         sa.Column('name', sa.String(length=100), nullable=False),
         sa.Column('country', sa.String(length=50), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('code')
     )
@@ -38,6 +39,7 @@ def upgrade() -> None:
         sa.Column('id', sa.UUID(), nullable=False),
         sa.Column('canonical_name', sa.String(length=100), nullable=False),
         sa.Column('short_code', sa.String(length=10), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('canonical_name')
     )
@@ -46,6 +48,7 @@ def upgrade() -> None:
         sa.Column('id', sa.UUID(), nullable=False),
         sa.Column('competition_id', sa.UUID(), nullable=False),
         sa.Column('season_year', sa.String(length=20), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(['competition_id'], ['competitions.id'], ),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('competition_id', 'season_year', name='uq_competition_season')
@@ -56,6 +59,7 @@ def upgrade() -> None:
         sa.Column('team_id', sa.UUID(), nullable=False),
         sa.Column('provider_name', sa.String(length=50), nullable=False),
         sa.Column('raw_alias', sa.String(length=100), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(['team_id'], ['teams.id'], ),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('provider_name', 'raw_alias', name='uq_provider_team_alias')
@@ -70,6 +74,7 @@ def upgrade() -> None:
         sa.Column('status', sa.String(length=20), nullable=False),
         sa.Column('home_score', sa.Integer(), nullable=True),
         sa.Column('away_score', sa.Integer(), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(['away_team_id'], ['teams.id'], ),
         sa.ForeignKeyConstraint(['home_team_id'], ['teams.id'], ),
         sa.ForeignKeyConstraint(['season_id'], ['seasons.id'], ),
