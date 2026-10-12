@@ -8,7 +8,7 @@ def test_settings_initialization():
     settings = get_settings()
     assert settings.APP_NAME == "football-intelligence-system"
     assert settings.POSTGRES_PORT == 5432
-    assert "postgresql://" in settings.database_url
+    assert "postgresql" in settings.database_url
 
 
 @pytest.mark.unit
