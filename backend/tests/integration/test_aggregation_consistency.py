@@ -11,16 +11,22 @@ from app.models.evaluation import ModelEvaluator
 
 @pytest.fixture(scope="module")
 def canonical_dataset():
-    conn = sqlite3.connect(os.path.join(os.path.dirname(__file__), "../../football_dev.db"))
+    db_file = os.path.join(os.path.dirname(__file__), "../../football_dev.db")
+    if not os.path.exists(db_file):
+        pytest.skip(f"Historical SQLite database {db_file} not found; skipping canonical holdout test.")
+    conn = sqlite3.connect(db_file)
     c = conn.cursor()
-    c.execute("""
-        SELECT m.id, m.kickoff_utc, s.competition_id, m.home_team_id, m.away_team_id,
-               m.home_score, m.away_score, s.id as season_id, s.season_year as season_name
-        FROM matches m JOIN seasons s ON m.season_id = s.id
-        WHERE m.status = 'FINISHED' 
-          AND s.competition_id IN ('719f254248c84352af579f0b81a5562b', '2a1a49d9968240ba889c366a0608dd02', 'cec923468c38424e93ea78340321570e', 'ac2186e78b5e4cf0b03362c5a82c7c95')
-        ORDER BY m.kickoff_utc ASC
-    """)
+    try:
+        c.execute("""
+            SELECT m.id, m.kickoff_utc, s.competition_id, m.home_team_id, m.away_team_id,
+                   m.home_score, m.away_score, s.id as season_id, s.season_year as season_name
+            FROM matches m JOIN seasons s ON m.season_id = s.id
+            WHERE m.status = 'FINISHED' 
+              AND s.competition_id IN ('719f254248c84352af579f0b81a5562b', '2a1a49d9968240ba889c366a0608dd02', 'cec923468c38424e93ea78340321570e', 'ac2186e78b5e4cf0b03362c5a82c7c95')
+            ORDER BY m.kickoff_utc ASC
+        """)
+    except sqlite3.OperationalError as e:
+        pytest.skip(f"Historical SQLite database does not contain matches table ({e}); skipping.")
     dev_rows, holdout_rows = [], []
     for r in c.fetchall():
         dto = ModelingRowDTO(
