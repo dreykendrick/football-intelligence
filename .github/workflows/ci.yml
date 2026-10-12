@@ -110,9 +110,11 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: football_intelligence_test
+          DATABASE_URL_OVERRIDE: postgresql://postgres:postgres@localhost:5432/football_intelligence_test
         run: |
           cd backend
-          alembic upgrade head
+          python -c "import psycopg2; conn = psycopg2.connect('postgresql://postgres:postgres@localhost:5432/football_intelligence_test'); print('psycopg2 connected successfully'); conn.close()"
+          alembic upgrade head --verbose
 
       - name: Verify Alembic Migration Head
         env:
