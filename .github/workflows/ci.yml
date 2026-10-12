@@ -123,10 +123,17 @@ jobs:
               command.upgrade(cfg, 'head')
               print('Alembic upgrade head succeeded!')
           except Exception as e:
-              with open('alembic_err.txt', 'w') as f:
+              with open('../alembic_traceback.txt', 'w') as f:
                   traceback.print_exc(file=f)
               sys.exit(1)
-          " || (echo "=== ALEMBIC MIGRATION FAILURE TRACEBACK ===" && cat backend/alembic_err.txt && exit 1)
+          "
+
+      - name: Upload Alembic Failure Traceback on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alembic-error-traceback
+          path: alembic_traceback.txt
 
       - name: Verify Alembic Migration Head
         env:
