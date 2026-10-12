@@ -182,4 +182,26 @@ jobs:
           RUNNING_IN_CI: "true"
         run: |
           cd backend
-          pytest -v
+          pytest -v --tb=short || (
+            echo "::error::Full regression suite failed!"
+            pytest -v --maxfail=3 --tb=short > regression_failure_summary.txt 2>&1 || true
+            cat regression_failure_summary.txt
+            exit 1
+          )
+
+      - name: Post Regression Failure to Commit Comment
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f backend/regression_failure_summary.txt ]; then
+            ERROR_BODY=$(cat backend/regression_failure_summary.txt | tail -c 4000)
+            PAYLOAD=$(jq -n --arg body "### Full Regression Suite Failure in Run ${{ github.run_id }}
+            \`\`\`
+            $ERROR_BODY
+            \`\`\`" '{"body": $body}')
+            curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
+                 -H "Content-Type: application/json" \
+                 -d "$PAYLOAD" \
+                 "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/comments" || true
+          fi
