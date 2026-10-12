@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   lint-policy:
@@ -149,17 +149,18 @@ jobs:
             \`\`\`
             $ERROR_BODY
             \`\`\`" '{"body": $body}')
-            curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
+            RESP=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST -H "Authorization: token $GITHUB_TOKEN" \
                  -H "Content-Type: application/json" \
                  -d "$PAYLOAD" \
-                 "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/comments" || true
+                 "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/comments")
+            echo "GitHub API Response: $RESP"
           fi
       - name: Upload Alembic Failure Traceback on Failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: alembic-error-traceback
-          path: alembic_traceback.txt
+          path: backend/alembic_err.txt
 
       - name: Verify Alembic Migration Head
         env:
