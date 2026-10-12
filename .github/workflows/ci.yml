@@ -113,8 +113,20 @@ jobs:
           DATABASE_URL_OVERRIDE: postgresql://postgres:postgres@localhost:5432/football_intelligence_test
         run: |
           cd backend
-          python -c "import psycopg2; conn = psycopg2.connect('postgresql://postgres:postgres@localhost:5432/football_intelligence_test'); print('psycopg2 connected successfully'); conn.close()"
-          alembic upgrade head --verbose
+          python -c "
+          import os, sys
+          from alembic.config import Config
+          from alembic import command
+          import traceback
+          cfg = Config('alembic.ini')
+          try:
+              command.upgrade(cfg, 'head')
+              print('Alembic upgrade head succeeded!')
+          except Exception as e:
+              print('ALEMBIC UPGRADE ERROR:')
+              traceback.print_exc()
+              sys.exit(1)
+          "
 
       - name: Verify Alembic Migration Head
         env:
