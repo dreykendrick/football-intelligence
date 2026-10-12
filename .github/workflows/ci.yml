@@ -137,7 +137,7 @@ jobs:
           cd backend
           pytest -m integration -v --tb=short || (
             echo "::error::Targeted PostgreSQL integration tests failed!"
-            pytest -m integration -q --tb=line | head -n 30 > test_failure_summary.txt || true
+            pytest -m integration --maxfail=1 --tb=short > test_failure_summary.txt 2>&1 || true
             cat test_failure_summary.txt
             if [ -n "$GITHUB_STEP_SUMMARY" ]; then
               echo "### Failed Integration Tests" >> $GITHUB_STEP_SUMMARY
