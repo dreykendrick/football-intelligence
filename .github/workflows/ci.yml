@@ -129,6 +129,8 @@ jobs:
               print(err_msg)
               print('='*50)
               sys.stdout.flush()
+              with open('alembic_err.txt', 'w') as ef:
+                  ef.write(err_msg)
               summary_file = os.environ.get('GITHUB_STEP_SUMMARY')
               if summary_file:
                   with open(summary_file, 'a') as sf:
@@ -136,6 +138,22 @@ jobs:
               sys.exit(1)
           "
 
+      - name: Post Failure to Commit Comment if Migration Fails
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f backend/alembic_err.txt ]; then
+            ERROR_BODY=$(cat backend/alembic_err.txt | head -c 4000)
+            PAYLOAD=$(jq -n --arg body "### Alembic Migration Failure in CI Run ${{ github.run_id }}
+            \`\`\`
+            $ERROR_BODY
+            \`\`\`" '{"body": $body}')
+            curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
+                 -H "Content-Type: application/json" \
+                 -d "$PAYLOAD" \
+                 "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/comments" || true
+          fi
       - name: Upload Alembic Failure Traceback on Failure
         if: failure()
         uses: actions/upload-artifact@v4
