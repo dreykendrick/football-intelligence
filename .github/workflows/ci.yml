@@ -123,8 +123,16 @@ jobs:
               command.upgrade(cfg, 'head')
               print('Alembic upgrade head succeeded!')
           except Exception as e:
-              with open('../alembic_traceback.txt', 'w') as f:
-                  traceback.print_exc(file=f)
+              err_msg = traceback.format_exc()
+              print('='*50)
+              print('ALEMBIC UPGRADE TRACEBACK:')
+              print(err_msg)
+              print('='*50)
+              sys.stdout.flush()
+              summary_file = os.environ.get('GITHUB_STEP_SUMMARY')
+              if summary_file:
+                  with open(summary_file, 'a') as sf:
+                      sf.write('### Alembic Upgrade Failure\n```\n' + err_msg + '\n```\n')
               sys.exit(1)
           "
 
