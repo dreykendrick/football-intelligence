@@ -1,0 +1,86 @@
+{
+  "certification_manifest_version": "1.0.0",
+  "certification_type": "DOCKER_INDEPENDENT_CI_DATABASE_CERTIFICATION",
+  "timestamp_utc": "2026-10-12T19:49:08.826479+00:00",
+  "repository": {
+    "full_name": "dreykendrick/football-intelligence",
+    "default_branch": "master",
+    "remote_url": "https://github.com/dreykendrick/football-intelligence.git",
+    "certified_commit_sha": "c0828dfe4d96bc0c02294f927af0432e1b3aa70c"
+  },
+  "ci_execution": {
+    "platform": "GitHub Actions",
+    "runner_os": "ubuntu-latest",
+    "workflow_file": ".github/workflows/ci.yml",
+    "workflow_run_id": 38298903233,
+    "workflow_run_number": 19,
+    "workflow_run_attempt": 1,
+    "run_url": "https://github.com/dreykendrick/football-intelligence/actions/runs/38298903233",
+    "status": "completed",
+    "conclusion": "success",
+    "jobs": {
+      "postgresql_certification": {
+        "id": 114976689602,
+        "name": "PostgreSQL Clean-Chain Migration & Integration Tests",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-12T19:37:47Z",
+        "completed_at": "2026-10-12T19:39:01Z"
+      },
+      "lint_policy": {
+        "id": 114976689769,
+        "name": "Codebase Lint Policy (Ruff)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-12T19:37:47Z",
+        "completed_at": "2026-10-12T19:37:55Z"
+      }
+    }
+  },
+  "database_infrastructure": {
+    "service_image": "postgres:16-alpine",
+    "port": 5432,
+    "database_name": "football_intelligence_test",
+    "driver": "psycopg2-binary",
+    "orm": "SQLAlchemy 2.0",
+    "migration_tool": "Alembic 1.13.1",
+    "clean_database_precondition_verified": true,
+    "pre_migration_public_tables": 0,
+    "target_alembic_head": "20260904_0004",
+    "verified_alembic_head": "20260904_0004"
+  },
+  "test_suite_results": {
+    "targeted_postgresql_integration_tests": {
+      "marker": "integration",
+      "passed": 59,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 3
+    },
+    "full_repository_regression_suite": {
+      "passed": 367,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 3
+    }
+  },
+  "security_and_governance": {
+    "docker_desktop_required_locally": false,
+    "wsl2_required_locally": false,
+    "production_secrets_used": false,
+    "ephemeral_credentials_only": true,
+    "permissions_level": "contents: read"
+  },
+  "immutable_scientific_manifest_hashes": {
+    "phase5_master_scientific_manifest_hash": "68b151b2c9683d4a431605bfda45902d78a2335f533ab49256ef47713ce22524",
+    "phase5_2_monitoring_policy_hash": "f974e06a3e2ad4730ed9e6d55ede58f10dd31f5400cd9e39c0c6b06df362887b",
+    "phase6_1_live_ingestion_manifest_hash": "98c0e07bee158e0493dbfbff036bc6b3e8c2f763c87c9d715a8ee5a2df0423d7",
+    "phase6_2_feature_materialization_manifest_hash": "7ac604ae60bf3d3dca2f2549925e01f681335f6063f972b9a1e05d2e078977c8",
+    "scientific_models_frozen": [
+      "C1_Multinomial_Logistic_1X2",
+      "M1_Attack_Defense_Poisson",
+      "M3_DC_Poisson"
+    ],
+    "feature_count_frozen": 251
+  }
+}
