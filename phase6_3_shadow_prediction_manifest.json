@@ -1,0 +1,63 @@
+{
+  "manifest_version": "1.0.0",
+  "sprint": "6.3",
+  "description": "Sprint 6.3 Live Shadow Prediction Pipeline, Append-Only Provenance & Outcome Monitoring Manifest",
+  "created_at_utc": "2026-10-16T02:00:00Z",
+  "immutable_scientific_manifest_hashes": {
+    "phase5_master_scientific_manifest_hash": "68b151b2c9683d4a431605bfda45902d78a2335f533ab49256ef47713ce22524",
+    "phase5_2_monitoring_policy_hash": "f974e06a3e2ad4730ed9e6d55ede58f10dd31f5400cd9e39c0c6b06df362887b",
+    "phase6_1_live_ingestion_manifest_hash": "98c0e07bee158e0493dbfbff036bc6b3e8c2f763c87c9d715a8ee5a2df0423d7",
+    "phase6_2_feature_materialization_manifest_hash": "7ac6041ff6169a321524b39f7c2bd3610913c94c3b4fc350a89c2550690a8b7b"
+  },
+  "model_artifacts": {
+    "c1_model_key": "C1_Multinomial_Logistic_1X2",
+    "c1_model_version": "1.0.0",
+    "c1_artifact_fingerprint": "art_fp_c1_ml_02f8b524",
+    "m1_model_key": "M1_Attack_Defense_Poisson",
+    "m1_model_version": "1.0.0",
+    "m1_artifact_fingerprint": "art_fp_m1_adp_7a9c8b1",
+    "m3_dc_model_key": "M3_DC_Poisson"
+  },
+  "market_ownership": {
+    "1x2_primary": "C1_Multinomial_Logistic_1X2",
+    "1x2_structural_diagnostic": "M1_Attack_Defense_Poisson",
+    "expected_goals": "M1_Attack_Defense_Poisson",
+    "btts": "M1_Attack_Defense_Poisson",
+    "over_under_2_5": "M1_Attack_Defense_Poisson",
+    "exact_scores": "M1_Attack_Defense_Poisson"
+  },
+  "prediction_eligibility_rules": [
+    "competition_supported",
+    "canonical_home_team_resolved",
+    "canonical_away_team_resolved",
+    "kickoff_usable",
+    "fixture_status_prediction_eligible",
+    "feature_snapshot_valid",
+    "feature_count_exact_251",
+    "feature_ordering_fingerprint_valid",
+    "implementation_fingerprint_valid",
+    "history_fingerprint_valid",
+    "scientific_manifest_hash_valid",
+    "monitoring_policy_hash_valid",
+    "pre_kickoff_lead_time_positive"
+  ],
+  "canonical_prediction_timing_rule": "LATEST_VALID_SHADOW_PREDICTION_BEFORE_KICKOFF",
+  "prediction_schema_version": "1.0.0",
+  "evaluation_schema_version": "1.0.0",
+  "quality_policy_identity": "f974e06a3e2ad4730ed9e6d55ede58f10dd31f5400cd9e39c0c6b06df362887b",
+  "fallback_policy_identity": "f974e06a3e2ad4730ed9e6d55ede58f10dd31f5400cd9e39c0c6b06df362887b",
+  "result_finality_policy": "TERMINAL_STATUS_FINISHED_ONLY",
+  "postponement_policy": "PRESERVE_PREDICTION_WITHOUT_SCORING_REGENERATE_FOR_NEW_KICKOFF",
+  "cancellation_policy": "PRESERVE_PREDICTION_EVALUATION_VOID",
+  "prediction_idempotency_rule": "DETERMINISTIC_UNIQUENESS_FIXTURE_SNAPSHOT_ARTIFACTS",
+  "evaluation_idempotency_rule": "UNIQUE_PREDICTION_AND_RESULT_VERSION",
+  "outcome_separation_rule": "PREDICTIONS_IMMUTABLE_EVALUATIONS_PERSISTED_SEPARATELY",
+  "monitoring_policy_identity": "f974e06a3e2ad4730ed9e6d55ede58f10dd31f5400cd9e39c0c6b06df362887b",
+  "governance_constraints": {
+    "automatic_retraining": false,
+    "automatic_recalibration": false,
+    "public_predictions": false,
+    "bookmaker_odds": "FORBIDDEN",
+    "shadow_mode_active": true
+  }
+}

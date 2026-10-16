@@ -47,6 +47,12 @@ from app.db.models.models import (
 from app.db.models.predictions import (
     PredictionSnapshot,
 )
+from app.db.models.shadow import (
+    MonitoringAlert,
+    ShadowEvaluation,
+    ShadowPrediction,
+    ShadowPredictionRun,
+)
 
 __all__ = [
     "Base",
@@ -81,4 +87,8 @@ __all__ = [
     "HistoricalDatasetSeason",
     "HistoricalDatasetMatch",
     "HistoricalDatasetExclusion",
+    "ShadowPredictionRun",
+    "ShadowPrediction",
+    "ShadowEvaluation",
+    "MonitoringAlert",
 ]

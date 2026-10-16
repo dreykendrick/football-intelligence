@@ -22,7 +22,7 @@ def test_alembic_migration_head_revision_resolves():
     script_dir = ScriptDirectory.from_config(alembic_cfg)
     head_revision = script_dir.get_current_head()
 
-    assert head_revision == "20260904_0004"
+    assert head_revision == "20261016_0005"
 
 
 @pytest.mark.integration
@@ -41,4 +41,7 @@ def test_alembic_offline_sql_generation(capsys):
     assert "CREATE TABLE feature_snapshots" in captured.out
     assert "CREATE TABLE model_versions" in captured.out
     assert "CREATE TABLE historical_dataset_releases" in captured.out
-    assert "20260904_0004" in captured.out
+    assert "CREATE TABLE shadow_predictions" in captured.out
+    assert "CREATE TABLE shadow_evaluations" in captured.out
+    assert "CREATE TABLE monitoring_alerts" in captured.out
+    assert "20261016_0005" in captured.out
