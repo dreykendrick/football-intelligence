@@ -17,11 +17,14 @@ from app.prediction.domain import (
     ShadowPredictionResult,
 )
 from app.prediction.eligibility import (
-    FROZEN_PHASE5_2_POLICY_HASH,
     FROZEN_PHASE5_MASTER_HASH,
     FROZEN_PHASE6_1_INGESTION_HASH,
     FROZEN_PHASE6_2_CANONICAL_HASH,
     PredictionEligibilityService,
+)
+from app.prediction.policy import (
+    FROZEN_PHASE5_2_POLICY_HASH,
+    Phase5_2_PolicyEngine,
 )
 
 FROZEN_C1_KEY = "C1_Multinomial_Logistic_1X2"
@@ -31,15 +34,6 @@ FROZEN_C1_FINGERPRINT = "art_fp_c1_ml_02f8b524"
 FROZEN_M1_KEY = "M1_Attack_Defense_Poisson"
 FROZEN_M1_VERSION = "1.0.0"
 FROZEN_M1_FINGERPRINT = "art_fp_m1_adp_7a9c8b1"
-
-# Frozen Phase 5.2 quality states
-QUALITY_NORMAL = "NORMAL"
-QUALITY_LIMITED_HISTORY = "LIMITED_HISTORY"
-QUALITY_HIGH_MODEL_DISAGREEMENT = "HIGH_MODEL_DISAGREEMENT"
-QUALITY_HIGH_DRIFT = "HIGH_DRIFT"
-QUALITY_FEATURE_DEGRADED = "FEATURE_DEGRADED"
-QUALITY_FALLBACK_MODEL_USED = "FALLBACK_MODEL_USED"
-QUALITY_BLOCKED = "BLOCKED"
 
 
 def compute_poisson_pmf(k: int, lam: float) -> float:
@@ -183,44 +177,38 @@ class ShadowPredictionService:
         c1_d = exp_d / sum_exp
         c1_a = exp_a / sum_exp
 
-        # 5. Model Disagreement Calculation (L1 variation distance)
-        disagreement_val = 0.5 * (abs(c1_h - struct_h) + abs(c1_d - struct_d) + abs(c1_a - struct_a))
-        if disagreement_val < 0.15:
-            disagreement_band = "LOW"
-        elif disagreement_val < 0.25:
-            disagreement_band = "MODERATE"
-        else:
-            disagreement_band = "HIGH"
+        # 5. Model Disagreement Calculation via Frozen Phase 5.2 Policy
+        disagreement_val, disagreement_band = Phase5_2_PolicyEngine.compute_model_disagreement(
+            c1_prob_h=c1_h,
+            c1_prob_d=c1_d,
+            c1_prob_a=c1_a,
+            m1_prob_h=struct_h,
+            m1_prob_d=struct_d,
+            m1_prob_a=struct_a,
+        )
 
-        # 6. Quality & Fallback Policy Routing (Phase 5.2 Precedence)
-        fallback_used = False
-        fallback_model = None
-        fallback_reason = None
-        quality_reasons = []
+        # 6. Quality & Fallback Policy Routing via Frozen Phase 5.2 Policy
+        policy_res = Phase5_2_PolicyEngine.evaluate(
+            is_eligible=True,
+            eligibility_reason=None,
+            critical_feature_absent=inp.critical_feature_absent,
+            known_cold_start=inp.known_cold_start,
+            missingness_count=inp.missingness_count,
+            drift_psi=inp.drift_psi,
+            disagreement_value=disagreement_val,
+            disagreement_band=disagreement_band,
+        )
 
-        if inp.critical_feature_absent or inp.known_cold_start:
-            fallback_used = True
-            fallback_model = FROZEN_M1_KEY
-            fallback_reason = "critical_feature_absent" if inp.critical_feature_absent else "known_cold_start"
+        fallback_used = policy_res.fallback_applied
+        fallback_model = policy_res.fallback_model
+        fallback_reason = policy_res.fallback_reason
+        quality_state = policy_res.quality_state
+        quality_reasons = policy_res.quality_reasons
+
+        if fallback_used:
             final_h, final_d, final_a = struct_h, struct_d, struct_a
-            quality_state = QUALITY_FALLBACK_MODEL_USED
-            quality_reasons.append(fallback_reason)
         else:
             final_h, final_d, final_a = c1_h, c1_d, c1_a
-            if inp.missingness_count > 5:
-                quality_state = QUALITY_FEATURE_DEGRADED
-                quality_reasons.append(f"high_missingness_{inp.missingness_count}")
-            elif inp.drift_psi >= 0.2:
-                quality_state = QUALITY_HIGH_DRIFT
-                quality_reasons.append(f"critical_drift_psi_{inp.drift_psi:.3f}")
-            elif disagreement_band == "HIGH":
-                quality_state = QUALITY_HIGH_MODEL_DISAGREEMENT
-                quality_reasons.append(f"high_disagreement_{disagreement_val:.4f}")
-            elif inp.missingness_count > 0:
-                quality_state = QUALITY_LIMITED_HISTORY
-                quality_reasons.append("limited_history_missingness")
-            else:
-                quality_state = QUALITY_NORMAL
 
         lead_time = int((inp.kickoff_utc - inp.prediction_time).total_seconds())
 
