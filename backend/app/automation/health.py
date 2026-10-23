@@ -6,12 +6,15 @@ and strictly isolates operational health from Phase 5.2 scientific model quality
 from __future__ import annotations
 
 import json
+import math
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from app.automation.clock import Clock, SystemClock
 from app.automation.domain import HealthStatusDTO, OperationalHealthState
 from app.automation.lease import LeaseManager
+from app.core.config import settings
 
 FROZEN_PHASE5_MASTER_HASH = "68b151b2c9683d4a431605bfda45902d78a2335f533ab49256ef47713ce22524"
 FROZEN_PHASE5_2_POLICY_HASH = "f974e06a3e2ad4730ed9e6d55ede58f10dd31f5400cd9e39c0c6b06df362887b"
@@ -21,25 +24,53 @@ FROZEN_SPRINT6_3_SHADOW_HASH = "e59dbe19c9a0568271e25fb9b1250a267a4a78c80ef20264
 
 EXPECTED_ALEMBIC_HEAD = "20261023_0006"
 
+DEFAULT_RUN_STALE_AFTER_HOURS: float = 24.0
+DEFAULT_PREDICTION_STALE_AFTER_HOURS: float = 48.0
+
 
 class HealthWatchdog:
     """
     Evaluates operational health without modifying system state.
     Monitors database connectivity, migration head, scientific manifest integrity,
     model artifact availability, lease health, and operational staleness.
+    Staleness thresholds are configuration-driven with certified defaults (24h run, 48h prediction).
     """
 
     def __init__(
         self,
         clock: Clock | None = None,
         lease_manager: LeaseManager | None = None,
-        max_run_staleness_hours: float = 24.0,
-        max_prediction_staleness_hours: float = 48.0,
+        max_run_staleness_hours: float | None = None,
+        max_prediction_staleness_hours: float | None = None,
     ) -> None:
         self.clock = clock or SystemClock()
         self.lease_manager = lease_manager
-        self.max_run_staleness_hours = max_run_staleness_hours
-        self.max_prediction_staleness_hours = max_prediction_staleness_hours
+
+        run_val = (
+            max_run_staleness_hours
+            if max_run_staleness_hours is not None
+            else getattr(settings, "OPS_RUN_STALE_AFTER_HOURS", DEFAULT_RUN_STALE_AFTER_HOURS)
+        )
+        pred_val = (
+            max_prediction_staleness_hours
+            if max_prediction_staleness_hours is not None
+            else getattr(settings, "OPS_PREDICTION_STALE_AFTER_HOURS", DEFAULT_PREDICTION_STALE_AFTER_HOURS)
+        )
+
+        self._validate_threshold("max_run_staleness_hours", run_val)
+        self._validate_threshold("max_prediction_staleness_hours", pred_val)
+
+        self.max_run_staleness_hours = float(run_val)
+        self.max_prediction_staleness_hours = float(pred_val)
+
+    @staticmethod
+    def _validate_threshold(name: str, val: Any) -> None:
+        if val is None or not isinstance(val, (int, float)) or isinstance(val, bool):
+            raise ValueError(f"INVALID_STALENESS_CONFIG: '{name}' must be a positive number, got {val}.")
+        if math.isnan(val) or math.isinf(val) or val <= 0:
+            raise ValueError(
+                f"INVALID_STALENESS_CONFIG: '{name}' must be strictly positive and finite (> 0), got {val}."
+            )
 
     def check_health(
         self,

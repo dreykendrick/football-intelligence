@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     LIVE_DATA_API_KEY: str | None = None
     LIVE_DATA_API_BASE_URL: str | None = None
 
+    # Operational Watchdog Staleness Thresholds (Hours)
+    OPS_RUN_STALE_AFTER_HOURS: float = 24.0
+    OPS_PREDICTION_STALE_AFTER_HOURS: float = 48.0
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

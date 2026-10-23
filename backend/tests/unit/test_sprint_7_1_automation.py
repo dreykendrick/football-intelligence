@@ -635,3 +635,91 @@ def test_ops_concurrency_load_zero_duplicates(fake_clock: FakeClock):
     assert s2.predictions_reused == 50
     assert s2.predictions_created == 0
     assert len(pred_svc._persisted_predictions) == 50, "Zero duplicate canonical predictions under concurrency load!"
+
+
+def test_ops_watchdog_run_staleness_threshold_is_configurable():
+    wd = HealthWatchdog(max_run_staleness_hours=12.0)
+    assert wd.max_run_staleness_hours == 12.0
+
+
+def test_ops_watchdog_prediction_staleness_threshold_is_configurable():
+    wd = HealthWatchdog(max_prediction_staleness_hours=36.0)
+    assert wd.max_prediction_staleness_hours == 36.0
+
+
+def test_ops_watchdog_default_thresholds_are_24h_and_48h():
+    wd = HealthWatchdog()
+    assert wd.max_run_staleness_hours == 24.0
+    assert wd.max_prediction_staleness_hours == 48.0
+
+
+def test_ops_watchdog_custom_thresholds_override_defaults(fake_clock: FakeClock):
+    # Set run threshold to 6.0 hours
+    wd = HealthWatchdog(clock=fake_clock, max_run_staleness_hours=6.0)
+    last_run = fake_clock.now() - timedelta(hours=7.0)
+    health = wd.check_health(database_reachable=True, current_alembic_head="20261023_0006", provider_configured=True, last_successful_run=last_run)
+    assert health.health_state == OperationalHealthState.STALE
+    assert "OPERATIONAL_STALENESS" in health.diagnostics[0]
+
+
+def test_ops_watchdog_rejects_invalid_staleness_configuration():
+    # 0 is invalid
+    with pytest.raises(ValueError, match="INVALID_STALENESS_CONFIG"):
+        HealthWatchdog(max_run_staleness_hours=0.0)
+
+    # Negative is invalid
+    with pytest.raises(ValueError, match="INVALID_STALENESS_CONFIG"):
+        HealthWatchdog(max_run_staleness_hours=-10.0)
+
+    # NaN is invalid
+    with pytest.raises(ValueError, match="INVALID_STALENESS_CONFIG"):
+        HealthWatchdog(max_run_staleness_hours=float("nan"))
+
+    # Inf is invalid
+    with pytest.raises(ValueError, match="INVALID_STALENESS_CONFIG"):
+        HealthWatchdog(max_run_staleness_hours=float("inf"))
+
+    # Non-number is invalid
+    with pytest.raises(ValueError, match="INVALID_STALENESS_CONFIG"):
+        HealthWatchdog(max_run_staleness_hours="invalid")  # type: ignore
+
+
+def test_ops_watchdog_run_staleness_boundary_behavior(fake_clock: FakeClock):
+    wd = HealthWatchdog(clock=fake_clock, max_run_staleness_hours=24.0)
+    now = fake_clock.now()
+
+    # 1. 23h 59m 59s -> NOT STALE
+    t_23h59 = now - timedelta(hours=23, minutes=59, seconds=59)
+    h1 = wd.check_health(database_reachable=True, current_alembic_head="20261023_0006", provider_configured=True, last_successful_run=t_23h59)
+    assert h1.health_state == OperationalHealthState.HEALTHY
+
+    # 2. 24h exactly -> NOT STALE (comparison operator contract is strictly '>')
+    t_24h = now - timedelta(hours=24)
+    h2 = wd.check_health(database_reachable=True, current_alembic_head="20261023_0006", provider_configured=True, last_successful_run=t_24h)
+    assert h2.health_state == OperationalHealthState.HEALTHY
+
+    # 3. 24h + 1s -> STALE
+    t_24h_1s = now - timedelta(hours=24, seconds=1)
+    h3 = wd.check_health(database_reachable=True, current_alembic_head="20261023_0006", provider_configured=True, last_successful_run=t_24h_1s)
+    assert h3.health_state == OperationalHealthState.STALE
+
+
+def test_ops_watchdog_prediction_staleness_boundary_behavior(fake_clock: FakeClock):
+    wd = HealthWatchdog(clock=fake_clock, max_prediction_staleness_hours=48.0)
+    now = fake_clock.now()
+
+    # 1. 47h 59m 59s -> NOT STALE
+    t_47h59 = now - timedelta(hours=47, minutes=59, seconds=59)
+    h1 = wd.check_health(database_reachable=True, current_alembic_head="20261023_0006", provider_configured=True, last_prediction_activity=t_47h59)
+    assert h1.health_state == OperationalHealthState.HEALTHY
+
+    # 2. 48h exactly -> NOT STALE (comparison operator contract is strictly '>')
+    t_48h = now - timedelta(hours=48)
+    h2 = wd.check_health(database_reachable=True, current_alembic_head="20261023_0006", provider_configured=True, last_prediction_activity=t_48h)
+    assert h2.health_state == OperationalHealthState.HEALTHY
+
+    # 3. 48h + 1s -> STALE
+    t_48h_1s = now - timedelta(hours=48, seconds=1)
+    h3 = wd.check_health(database_reachable=True, current_alembic_head="20261023_0006", provider_configured=True, last_prediction_activity=t_48h_1s)
+    assert h3.health_state == OperationalHealthState.STALE
+
