@@ -256,3 +256,221 @@ def test_shadow_operational_aliases_map_deterministically():
     assert Phase5_2_PolicyEngine.map_operational_category_to_frozen_policy(
         OPERATIONAL_HEALTHY, disagreement_band="HIGH"
     ) == QUALITY_HIGH_MODEL_DISAGREEMENT
+
+
+# --- Section 25-27 Forensic Reconciliation & Boundary Tests ---
+
+def test_phase5_2_true_cold_start_behavior():
+    """Assert true cold start (unseen club / zero history) routes to M1 fallback."""
+    svc = ShadowPredictionService()
+    inp = make_test_input(known_cold_start=True, missingness_count=0)
+    res = svc.predict(inp)
+    assert res.fallback_used is True
+    assert res.fallback_model == FALLBACK_1X2_MODEL
+    assert res.quality_state == QUALITY_FALLBACK_MODEL_USED
+    assert "known_cold_start" in res.quality_reasons
+
+
+def test_phase5_2_limited_history_behavior():
+    """Assert limited history (promoted/new team with sparse history 1..5) uses C1 with imputation."""
+    svc = ShadowPredictionService()
+    inp = make_test_input(known_cold_start=False, missingness_count=3)
+    res = svc.predict(inp)
+    assert res.fallback_used is False
+    assert res.fallback_model is None
+    assert res.effective_model_1x2 == PRIMARY_1X2_MODEL
+    assert res.quality_state == QUALITY_LIMITED_HISTORY
+    assert "limited_history_missingness" in res.quality_reasons
+
+
+def test_phase5_2_critical_feature_absent_behavior():
+    """Assert critical feature absence routes to M1 fallback."""
+    svc = ShadowPredictionService()
+    inp = make_test_input(critical_feature_absent=True)
+    res = svc.predict(inp)
+    assert res.fallback_used is True
+    assert res.fallback_model == FALLBACK_1X2_MODEL
+    assert res.quality_state == QUALITY_FALLBACK_MODEL_USED
+    assert "critical_feature_absent" in res.quality_reasons
+
+
+def test_phase5_2_missingness_boundary_zero():
+    """Boundary test: 0 missing features -> NORMAL (C1 primary)."""
+    res = Phase5_2_PolicyEngine.evaluate(
+        is_eligible=True,
+        eligibility_reason=None,
+        critical_feature_absent=False,
+        known_cold_start=False,
+        missingness_count=0,
+        drift_psi=0.0,
+        disagreement_value=0.05,
+        disagreement_band="LOW",
+    )
+    assert res.quality_state == QUALITY_NORMAL
+    assert res.effective_model_1x2 == PRIMARY_1X2_MODEL
+    assert res.fallback_applied is False
+
+
+def test_phase5_2_missingness_boundary_one():
+    """Boundary test: 1 missing feature -> LIMITED_HISTORY (C1 primary)."""
+    res = Phase5_2_PolicyEngine.evaluate(
+        is_eligible=True,
+        eligibility_reason=None,
+        critical_feature_absent=False,
+        known_cold_start=False,
+        missingness_count=1,
+        drift_psi=0.0,
+        disagreement_value=0.05,
+        disagreement_band="LOW",
+    )
+    assert res.quality_state == QUALITY_LIMITED_HISTORY
+    assert res.effective_model_1x2 == PRIMARY_1X2_MODEL
+    assert res.fallback_applied is False
+
+
+def test_phase5_2_missingness_boundary_five():
+    """Boundary test: 5 missing features -> LIMITED_HISTORY (C1 primary, upper boundary)."""
+    res = Phase5_2_PolicyEngine.evaluate(
+        is_eligible=True,
+        eligibility_reason=None,
+        critical_feature_absent=False,
+        known_cold_start=False,
+        missingness_count=5,
+        drift_psi=0.0,
+        disagreement_value=0.05,
+        disagreement_band="LOW",
+    )
+    assert res.quality_state == QUALITY_LIMITED_HISTORY
+    assert res.effective_model_1x2 == PRIMARY_1X2_MODEL
+    assert res.fallback_applied is False
+
+
+def test_phase5_2_missingness_boundary_six():
+    """Boundary test: 6 missing features -> FEATURE_DEGRADED (C1 primary, transition boundary)."""
+    res = Phase5_2_PolicyEngine.evaluate(
+        is_eligible=True,
+        eligibility_reason=None,
+        critical_feature_absent=False,
+        known_cold_start=False,
+        missingness_count=6,
+        drift_psi=0.0,
+        disagreement_value=0.05,
+        disagreement_band="LOW",
+    )
+    assert res.quality_state == QUALITY_FEATURE_DEGRADED
+    assert res.effective_model_1x2 == PRIMARY_1X2_MODEL
+    assert res.fallback_applied is False
+
+
+def test_phase5_2_cold_start_and_missingness_precedence():
+    """Assert cold start (precedence 6) overrides both limited history (2) and feature degraded (5)."""
+    # Cold start with minor missingness (count=2)
+    res_minor = Phase5_2_PolicyEngine.evaluate(
+        is_eligible=True,
+        eligibility_reason=None,
+        critical_feature_absent=False,
+        known_cold_start=True,
+        missingness_count=2,
+        drift_psi=0.0,
+        disagreement_value=0.05,
+        disagreement_band="LOW",
+    )
+    assert res_minor.quality_state == QUALITY_FALLBACK_MODEL_USED
+    assert res_minor.fallback_applied is True
+    assert res_minor.effective_model_1x2 == FALLBACK_1X2_MODEL
+
+    # Cold start with high missingness (count=10)
+    res_major = Phase5_2_PolicyEngine.evaluate(
+        is_eligible=True,
+        eligibility_reason=None,
+        critical_feature_absent=False,
+        known_cold_start=True,
+        missingness_count=10,
+        drift_psi=0.0,
+        disagreement_value=0.05,
+        disagreement_band="LOW",
+    )
+    assert res_major.quality_state == QUALITY_FALLBACK_MODEL_USED
+    assert res_major.fallback_applied is True
+    assert res_major.effective_model_1x2 == FALLBACK_1X2_MODEL
+
+
+def test_phase5_2_fallback_model_is_m1_only_when_policy_requires():
+    """Assert M1 is effective 1X2 ONLY when fallback is applied."""
+    svc = ShadowPredictionService()
+
+    # Normal fixture -> C1 is effective 1X2 (fallback_used is False)
+    res_normal = svc.predict(make_test_input())
+    assert res_normal.effective_model_1x2 == PRIMARY_1X2_MODEL
+    assert res_normal.fallback_used is False
+    assert res_normal.fallback_model is None
+
+    # Cold start -> M1 is effective 1X2 (fallback_used is True, prob_home matches structural)
+    res_cold = svc.predict(make_test_input(known_cold_start=True))
+    assert res_cold.effective_model_1x2 == FALLBACK_1X2_MODEL
+    assert res_cold.fallback_used is True
+    assert res_cold.fallback_model == FALLBACK_1X2_MODEL
+    assert res_cold.prob_home == res_cold.structural_prob_home
+
+    # Critical feature absent -> M1 is effective 1X2 (fallback_used is True, prob_home matches structural)
+    res_crit = svc.predict(make_test_input(critical_feature_absent=True))
+    assert res_crit.effective_model_1x2 == FALLBACK_1X2_MODEL
+    assert res_crit.fallback_used is True
+    assert res_crit.fallback_model == FALLBACK_1X2_MODEL
+    assert res_crit.prob_home == res_crit.structural_prob_home
+
+
+def test_phase5_2_policy_hash_is_persisted():
+    """Assert policy hash matches frozen Phase 5.2 hash on all predictions."""
+    svc = ShadowPredictionService()
+    res = svc.predict(make_test_input())
+    assert res.phase5_2_policy_hash == "f974e06a3e2ad4730ed9e6d55ede58f10dd31f5400cd9e39c0c6b06df362887b"
+
+
+def test_phase5_2_all_precedence_combinations():
+    """Assert exact precedence ordering across all multi-condition conflict combinations."""
+    # 1. Cold start + High drift -> Fallback wins
+    r1 = Phase5_2_PolicyEngine.evaluate(
+        is_eligible=True, eligibility_reason=None, critical_feature_absent=False,
+        known_cold_start=True, missingness_count=0, drift_psi=0.40,
+        disagreement_value=0.05, disagreement_band="LOW"
+    )
+    assert r1.quality_state == QUALITY_FALLBACK_MODEL_USED
+    assert r1.fallback_applied is True
+
+    # 2. Cold start + High disagreement -> Fallback wins
+    r2 = Phase5_2_PolicyEngine.evaluate(
+        is_eligible=True, eligibility_reason=None, critical_feature_absent=False,
+        known_cold_start=True, missingness_count=0, drift_psi=0.0,
+        disagreement_value=0.45, disagreement_band="HIGH"
+    )
+    assert r2.quality_state == QUALITY_FALLBACK_MODEL_USED
+    assert r2.fallback_applied is True
+
+    # 3. Critical missing + High drift -> Fallback wins
+    r3 = Phase5_2_PolicyEngine.evaluate(
+        is_eligible=True, eligibility_reason=None, critical_feature_absent=True,
+        known_cold_start=False, missingness_count=0, drift_psi=0.40,
+        disagreement_value=0.05, disagreement_band="LOW"
+    )
+    assert r3.quality_state == QUALITY_FALLBACK_MODEL_USED
+    assert r3.fallback_applied is True
+
+    # 4. Feature degraded + High disagreement -> Feature degraded wins
+    r4 = Phase5_2_PolicyEngine.evaluate(
+        is_eligible=True, eligibility_reason=None, critical_feature_absent=False,
+        known_cold_start=False, missingness_count=8, drift_psi=0.05,
+        disagreement_value=0.40, disagreement_band="HIGH"
+    )
+    assert r4.quality_state == QUALITY_FEATURE_DEGRADED
+    assert r4.fallback_applied is False
+    assert r4.effective_model_1x2 == PRIMARY_1X2_MODEL
+
+    # 5. Blocked + everything else active -> Blocked wins
+    r5 = Phase5_2_PolicyEngine.evaluate(
+        is_eligible=False, eligibility_reason="POST_KICKOFF", critical_feature_absent=True,
+        known_cold_start=True, missingness_count=20, drift_psi=0.90,
+        disagreement_value=0.80, disagreement_band="HIGH"
+    )
+    assert r5.quality_state == QUALITY_BLOCKED
+    assert r5.effective_model_1x2 == "NONE"

@@ -99,6 +99,11 @@ class ShadowPredictionResult:
     is_canonical_evaluation_prediction: bool
     prediction_schema_version: str = "1.0.0"
 
+    @property
+    def effective_model_1x2(self) -> str:
+        """Returns the effective 1X2 model: fallback model if triggered, else C1."""
+        return self.fallback_model if self.fallback_used and self.fallback_model else self.c1_model_key
+
 
 @dataclass
 class BlockedDecisionRecord:
