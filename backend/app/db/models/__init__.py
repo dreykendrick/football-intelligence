@@ -53,6 +53,11 @@ from app.db.models.shadow import (
     ShadowPrediction,
     ShadowPredictionRun,
 )
+from app.db.models.automation import (
+    OperationalFailure,
+    OperationalRun,
+    SchedulerLease,
+)
 
 __all__ = [
     "Base",
@@ -91,4 +96,7 @@ __all__ = [
     "ShadowPrediction",
     "ShadowEvaluation",
     "MonitoringAlert",
+    "SchedulerLease",
+    "OperationalRun",
+    "OperationalFailure",
 ]

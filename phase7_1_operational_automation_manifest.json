@@ -1,0 +1,50 @@
+{
+  "manifest_version": "1.0.0",
+  "sprint": "7.1",
+  "description": "Sprint 7.1 Operational Automation, Scheduling, Distributed Fencing, Retries & Reliability Manifest",
+  "created_at_utc": "2026-10-23T08:00:00Z",
+  "immutable_scientific_manifest_hashes": {
+    "phase5_master_scientific_manifest_hash": "68b151b2c9683d4a431605bfda45902d78a2335f533ab49256ef47713ce22524",
+    "phase5_2_monitoring_policy_hash": "f974e06a3e2ad4730ed9e6d55ede58f10dd31f5400cd9e39c0c6b06df362887b",
+    "phase6_1_live_ingestion_manifest_hash": "98c0e07bee158e0493dbfbff036bc6b3e8c2f763c87c9d715a8ee5a2df0423d7",
+    "phase6_2_feature_materialization_manifest_hash": "7ac6041ff6169a321524b39f7c2bd3610913c94c3b4fc350a89c2550690a8b7b",
+    "phase6_3_shadow_prediction_manifest_hash": "e59dbe19c9a0568271e25fb9b1250a267a4a78c80ef202641c89bb6ce99b98ee"
+  },
+  "orchestration_version": "1.0.0",
+  "execution_modes": [
+    "REPLAY_CERTIFICATION",
+    "LIVE_SHADOW"
+  ],
+  "utc_clock_policy": "INJECTABLE_UTC_CENTRAL_CLOCK",
+  "lease_policy": "POSTGRESQL_DISTRIBUTED_LEASE_WITH_HEARTBEAT_AND_EXPIRY",
+  "fencing_policy": "MONOTONIC_FENCING_TOKEN_VALIDATION_STALE_WORKER_REJECTION",
+  "at_least_once_policy": "AT_LEAST_ONCE_SAFE_DETERMINISTIC_STAGE_KEYS",
+  "phase6_prediction_identity_source": "SPRINT_6_3_SHADOW_PREDICTION_SERVICE",
+  "phase6_result_finality_source": "PHASE_6_1_TERMINAL_STATUS_FINISHED_ONLY",
+  "phase6_postponement_source": "PHASE_6_PRESERVE_PREDICTION_WITHOUT_SCORING_REGENERATE_FOR_NEW_KICKOFF",
+  "phase6_cancellation_source": "PHASE_6_PRESERVE_PREDICTION_EVALUATION_VOID",
+  "retry_policy": "BOUNDED_EXPONENTIAL_BACKOFF_TRANSIENT_ONLY",
+  "error_category_policy": [
+    "PROVIDER",
+    "DATABASE",
+    "CONFIGURATION",
+    "SCIENTIFIC_INTEGRITY",
+    "DATA",
+    "INTERNAL"
+  ],
+  "retryability_policy": [
+    "TRANSIENT",
+    "PERMANENT"
+  ],
+  "circuit_breaker_scope": "PROCESS_LOCAL",
+  "monitoring_source": "PHASE_6_3_OBSERVATIONAL_MONITORING_ENGINE",
+  "governance_constraints": {
+    "automatic_retraining": false,
+    "automatic_recalibration": false,
+    "public_predictions": false,
+    "bookmaker_odds": "FORBIDDEN",
+    "betting_logic": "FORBIDDEN",
+    "real_provider_operation_authorized": false,
+    "real_provider_status": "PENDING"
+  }
+}
