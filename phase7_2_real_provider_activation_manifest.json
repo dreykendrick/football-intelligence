@@ -1,0 +1,44 @@
+{
+  "manifest_version": "1.0.0",
+  "sprint": "7.2",
+  "description": "Sprint 7.2 Real Provider Activation, Scheduled Live Shadow Operations & End-to-End Live Certification Manifest",
+  "created_at_utc": "2026-10-23T11:00:00Z",
+  "immutable_scientific_manifest_hashes": {
+    "phase5_master_scientific_manifest_hash": "68b151b2c9683d4a431605bfda45902d78a2335f533ab49256ef47713ce22524",
+    "phase5_2_monitoring_policy_hash": "f974e06a3e2ad4730ed9e6d55ede58f10dd31f5400cd9e39c0c6b06df362887b",
+    "phase6_1_live_ingestion_manifest_hash": "98c0e07bee158e0493dbfbff036bc6b3e8c2f763c87c9d715a8ee5a2df0423d7",
+    "phase6_2_feature_materialization_manifest_hash": "7ac6041ff6169a321524b39f7c2bd3610913c94c3b4fc350a89c2550690a8b7b",
+    "phase6_3_shadow_prediction_manifest_hash": "e59dbe19c9a0568271e25fb9b1250a267a4a78c80ef202641c89bb6ce99b98ee",
+    "phase7_1_operational_automation_manifest_hash": "6a67c19becce96ff5e1d13c867dec00bc63da24e6ea2411b8a0842e0a34fdf2e"
+  },
+  "provider_adapter_version": "1.0.0",
+  "provider_name": "football_data_org",
+  "credential_policy": "ENVIRONMENT_INJECTED_SECRET_MASKED_IN_DIAGNOSTICS",
+  "supported_competitions": [
+    "E0",
+    "SP1",
+    "I1",
+    "D1"
+  ],
+  "competition_mapping_policy": "EXPLICIT_DETERMINISTIC_TABLE_REJECT_UNSUPPORTED",
+  "team_mapping_policy": "EXPLICIT_STORED_OR_PRE_REGISTERED_MAPPING_REJECT_UNKNOWN_NO_FUZZY",
+  "raw_provider_provenance_policy": "APPEND_ONLY_OBSERVATION_WITH_PAYLOAD_SHA256_FINGERPRINT",
+  "execution_mode": "LIVE_SHADOW",
+  "scheduler_type": "EXTERNAL_SYSTEMD_OR_CRON_TRIGGERING_OPS_RUN_ONCE",
+  "scheduler_cadence_policy": "SIX_HOUR_INTERVAL_MATCHDAY_ALIGNED_FENCED_BY_DISTRIBUTED_LEASE",
+  "provider_rate_limit_policy": "HEADER_TRACKED_QUOTA_RESPECTFUL_EXPONENTIAL_BACKOFF_ON_429",
+  "provider_retry_policy_source": "SPRINT_7_1_BOUNDED_EXPONENTIAL_BACKOFF",
+  "prediction_identity_source": "SPRINT_6_3_SHADOW_PREDICTION_SERVICE",
+  "result_finality_source": "PHASE_6_1_TERMINAL_STATUS_FINISHED_ONLY",
+  "feature_source": "PHASE_6_2_POINT_IN_TIME_251_FEATURE_ENGINE",
+  "quality_policy_source": "PHASE_5_2_QUALITY_POLICY_ENGINE",
+  "governance_constraints": {
+    "automatic_retraining": false,
+    "automatic_recalibration": false,
+    "public_predictions": false,
+    "bookmaker_odds": "FORBIDDEN",
+    "betting_logic": "FORBIDDEN",
+    "real_provider_operation_authorized": true,
+    "real_provider_status": "PENDING_CREDENTIALS"
+  }
+}

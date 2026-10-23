@@ -1,0 +1,19 @@
+[Unit]
+Description=Football Intelligence Operational Automation (Live Shadow Mode)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=oneshot
+User=football-ops
+Group=football-ops
+WorkingDirectory=/opt/football-intelligence
+Environment="PATH=/opt/football-intelligence/.venv/bin:/usr/local/bin:/usr/bin"
+EnvironmentFile=/etc/football-intelligence/live.env
+ExecStart=/opt/football-intelligence/.venv/bin/python -m app.automation.cli --mode LIVE_SHADOW --trigger SYSTEMD_TIMER
+StandardOutput=journal
+StandardError=journal
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

@@ -41,6 +41,8 @@ from app.prediction.service import (
     FROZEN_M1_KEY,
     ShadowPredictionService,
 )
+from app.providers.live.adapter import LiveIngestionAdapter
+from app.providers.live.base import LiveFootballDataProvider
 
 FROZEN_PHASE5_MASTER_HASH = "68b151b2c9683d4a431605bfda45902d78a2335f533ab49256ef47713ce22524"
 FROZEN_PHASE5_2_POLICY_HASH = "f974e06a3e2ad4730ed9e6d55ede58f10dd31f5400cd9e39c0c6b06df362887b"
@@ -68,10 +70,11 @@ class OperationalOrchestrator:
         circuit_breaker: CircuitBreaker | None = None,
         execution_mode: ExecutionMode = ExecutionMode.REPLAY_CERTIFICATION,
         scheduler_instance_id: str = "orchestrator-instance-1",
-        git_commit: str = "832b2e4",
+        git_commit: str = "HEAD",
         pipeline_version: str = "1.0.0",
         live_api_key: str | None = None,
         live_api_base_url: str | None = None,
+        live_provider: LiveFootballDataProvider | None = None,
         session_factory: Any = None,
     ) -> None:
         self.clock = clock or SystemClock()
@@ -85,7 +88,8 @@ class OperationalOrchestrator:
         self.scheduler_instance_id = scheduler_instance_id
         self.git_commit = git_commit
         self.pipeline_version = pipeline_version
-        self.live_api_key = live_api_key
+        self.live_provider = live_provider
+        self.live_api_key = live_api_key or (getattr(live_provider, "api_key", None))
         self.live_api_base_url = live_api_base_url
         self.session_factory = session_factory
 
@@ -167,7 +171,17 @@ class OperationalOrchestrator:
                 )
 
             # Stage 6 & 7: Determine & Execute Due Ingestion Work (Phase 6.1)
-            raw_fixtures = fixtures_due or []
+            raw_fixtures = fixtures_due
+            if raw_fixtures is None and self.execution_mode == ExecutionMode.LIVE_SHADOW and self.live_provider is not None:
+                summary.provider_status = "CONNECTED"
+                adapter = LiveIngestionAdapter(clock=self.clock)
+                live_dtos = self._handle_provider_call_with_retry(
+                    lambda: self.live_provider.get_upcoming_fixtures(), summary
+                )
+                raw_fixtures = [adapter.adapt_live_fixture_to_orchestrator_record(dto) for dto in live_dtos]
+            elif raw_fixtures is None:
+                raw_fixtures = []
+
             summary.fixtures_discovered = len(raw_fixtures)
 
             if simulate_provider_failure is not None:
@@ -178,6 +192,18 @@ class OperationalOrchestrator:
             # Stage 8: Determine & Materialize Due Feature Snapshots (Phase 6.2)
             # In Phase 6.2, valid snapshots have exact certified 251-feature width
             for f in raw_fixtures:
+                if not f.get("is_mapped", True):
+                    summary.predictions_blocked += 1
+                    self._record_failure(
+                        summary.run_id,
+                        "INGESTION",
+                        "MAPPING",
+                        ErrorCategory.DATA,
+                        Retryability.PERMANENT,
+                        f.get("unresolved_reason", "UNRESOLVED_MAPPING"),
+                        f"Fixture {f.get('provider_fixture_id', 'unknown')} blocked due to unresolved mapping.",
+                    )
+                    continue
                 if f.get("needs_snapshot", True):
                     summary.snapshots_created += 1
                 else:
@@ -195,6 +221,8 @@ class OperationalOrchestrator:
 
             current_time = self.clock.now()
             for f in raw_fixtures:
+                if not f.get("is_mapped", True):
+                    continue
                 kickoff = f.get("kickoff_utc")
                 if kickoff is None:
                     continue

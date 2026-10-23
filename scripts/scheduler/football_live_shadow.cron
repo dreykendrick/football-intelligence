@@ -1,0 +1,5 @@
+# Football Intelligence & Probability System
+# Live Shadow Prediction Pipeline External Cron Schedule
+# Invokes ops-run-once in LIVE_SHADOW mode every 6 hours
+# 0 0,6,12,18 * * * cd /opt/football-intelligence && /opt/football-intelligence/.venv/bin/python -m app.automation.cli --mode LIVE_SHADOW --trigger CRON >> /var/log/football-intelligence/live_shadow.log 2>&1
+0 */6 * * * /opt/football-intelligence/scripts/run_live_shadow.sh
